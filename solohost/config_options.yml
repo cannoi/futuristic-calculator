@@ -1,0 +1,7 @@
+title: "Futuristic Calculator"
+eyebrow: SoloHost App
+description: "giao diện chưa có , hãy tạo giao diện chuyên nghiệp- đầy đủ các phím chức năng như máy tính cầm tay phổ thông. Giao diện đẹp tương lai, kích thước thích ứng phù hợp mọi loại màn hình ."
+footer_hint: Ready to run on Pi Desktop SoloHost.
+output_file: .env
+after_save: Saved. Start the app from SoloHost.
+fields: []
