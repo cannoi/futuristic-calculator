@@ -1,58 +1,17 @@
-# SECURITY CONTRACT
+# SECURITY NOTES
 
-## Secrets
+1. The Feedback Hub ingest token is server-side only.
+2. The browser never receives the ingest token.
+3. AI API keys are stored server-side with file mode 0600.
+4. Logs are redacted for key/token/password/authorization fields.
+5. AI actions are allowlisted by the server-side host adapter; browser-supplied action definitions are ignored.
+6. Destructive actions require host-side confirmation.
+7. The AI model is not trusted code.
+8. The AI model is not trusted code.
+9. Never expose `.env`, `process.env`, cookies, sessions or filesystem secrets through app context.
+10. Do not give the AI shell, Docker, arbitrary HTTP, SQL, or filesystem write tools.
+11. If this ZIP/source is published publicly, rotate the Feedback Hub ingest token and replace the built-in default.
 
-- AI API keys remain server-side.
-- Feedback ingest token remains server-side.
-- `/api/ai/settings` returns only `hasKey` + masked key.
-- API keys are never added to AI prompts or logs.
-- Gemini key is sent through `x-goog-api-key`, not query string.
-- Feedback token is never returned by `publicConfig()`.
+## Network
 
-## Routes
-
-The host should protect `/api/ai/*` and `/api/logs` with its existing authentication. `mountAIRoutes()` supports an `authorize(req)` hook.
-
-Example:
-
-```js
-mountAIRoutes(app, ai, {
-  authorize: req => req.user?.authenticated === true
-});
-```
-
-## Actions
-
-The model can only propose names that are present in the server-side action registry.
-
-Host code must validate arguments again.
-
-Never expose:
-
-- shell
-- Docker
-- arbitrary code execution
-- arbitrary outbound URL fetch
-- filesystem secrets
-- environment secrets
-- credentials
-
-Destructive actions must require explicit confirmation.
-
-## Base URL
-
-Settings reject embedded URL credentials and non-http(s) protocols. Cloud/custom endpoints should use HTTPS; HTTP is permitted only for local endpoints.
-
-## Rate limiting
-
-AI chat has a default in-memory limit of 30 requests/client/minute. The host can change or disable it through route options.
-
-## Feedback
-
-The supplied Feedback Hub token is a server credential. If the module/source is published or broadly shared, rotate the token and replace the server configuration.
-
-## Privacy
-
-The widget keeps short recent chat history in memory in the browser. It does not persist full AI conversations by default.
-
-Feedback offline queue can temporarily store unsent feedback in browser localStorage. It never stores API keys or Hub tokens.
+The default Hub endpoint is HTTP because that is the endpoint supplied for this project. For public deployment, HTTPS is strongly preferred. If the Hub remains HTTP, the ingest token is protected from the browser but is still transported over the network to the Hub; use a secure reverse proxy/tunnel or HTTPS Hub endpoint when possible.

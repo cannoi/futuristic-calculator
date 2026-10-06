@@ -1,7 +1,2 @@
-.env
-.env.*
-node_modules/
-artifacts/
-data/
-*.db
-.git/
+data/*
+!data/.gitkeep

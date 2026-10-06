@@ -42,16 +42,16 @@ function calculate() {
 }
 
 
-/* ===== Universal AI + Feedback Module integration =====
- * The calculator UI/business logic above is preserved. The old AI/Feedback
- * implementation has been removed; the universal modules own all AI,
- * Feedback, Settings and Logs UI.
+/* ===== Universal AI + Feedback (SoloHost panel) integration =====
+ * Calculator UI/business logic above is unchanged. The panel owns Chat,
+ * Feedback, Settings and Logs. Context + actions are exposed for ai-panel.js.
  */
 function applyUniversalAiActions(actions) {
   if (!Array.isArray(actions)) return;
   for (const a of actions) {
-    if (!a || !a.ok) continue;
-    switch (a.action) {
+    if (!a || a.ok === false) continue;
+    const name = a.action || a.name;
+    switch (name) {
       case 'clear_all':
         clearAll();
         break;
@@ -84,14 +84,6 @@ function calculatorAiContext() {
   };
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (!window.UniversalAIWidget) return;
-
-  window.UniversalAIWidget.create({
-    variant: 'floating',
-    iconUrl: '/ai-module/assets/ai-icon.png',
-    title: 'AI Assistant',
-    getContext: calculatorAiContext,
-    onActions: applyUniversalAiActions,
-  });
-});
+// Expose for ai-panel.js (loaded after this script)
+window.applyUniversalAiActions = applyUniversalAiActions;
+window.calculatorAiContext = calculatorAiContext;
