@@ -7,33 +7,33 @@ Upgrade existing GitHub app: cannoi/futuristic-calculator
 
 ## Quality
 {
-  "functionality": "The application provides a calculator interface with a newly integrated AI panel. The AI integration logic is present in the UI but relies on the /api/ai/chat endpoint. The UI is responsive and includes the required badge.",
-  "security": "WARNING: Several files (public/script.js, lib/ai-gateway.js, public/style.css) contain potential hard-coded sensitive patterns/credentials. Dynamic execution was detected in public/script.js. The .env.example file is present but empty, which is a minor maintenance issue.",
-  "reliability": "The core calculator engine is tested via npm test. The server implements a health check endpoint. However, the AI integration lacks robust error handling for API failures or missing keys.",
-  "performance": "Application uses static files and minimal dependencies (Node.js native). Performance should be high. The chat history is limited to 8 items, which helps manage memory.",
-  "documentation": "README and Solohost documentation files are present, providing clear installation instructions for the Pi Desktop environment.",
-  "overall": "The application is functional and ready for deployment, but requires security cleanup regarding sensitive strings and credentials before production use.",
+  "functionality": "The app provides a calculator with an AI assistant panel. Core arithmetic works (calc-engine tested). Health endpoint present. UI is responsive with the required badge.",
+  "security": "WARNING: Previous scan detected potential hard-coded credentials in public/script.js, lib/ai-gateway.js, and public/style.css. Dynamic execution (eval/Function) was detected in public/script.js. These remain unaddressed in the current manifest.",
+  "reliability": "Core engine passes npm test. Server includes health check. AI integration lacks robust error handling for missing/invalid API keys.",
+  "performance": "Minimal dependencies (pure Node.js), static file serving, chat history capped at 8 items. Expected high performance.",
+  "documentation": "README.md, RELEASE_NOTES.md, and solohost/ docs present. Installation instructions provided.",
+  "overall": "The app is functional and ready for deployment, but security findings from the previous scan must be resolved before production release.",
   "verdict": "WARNING",
   "findings": [
     {
-      "id": "SECURITY_WARNING",
+      "id": "SECURITY_CREDENTIALS",
       "severity": "warning",
-      "description": "Potential hard-coded sensitive credentials detected in multiple files."
+      "description": "Potential hard-coded sensitive strings/credentials detected in multiple source files."
     },
     {
       "id": "DYNAMIC_EXECUTION",
       "severity": "warning",
-      "description": "Dynamic command execution detected in public/script.js."
+      "description": "Dynamic code execution detected in public/script.js."
     },
     {
-      "id": "MAINTENANCE",
+      "id": "AI_ERROR_HANDLING",
       "severity": "notice",
-      "description": ".env.example is empty and should be removed or properly populated."
+      "description": "AI feature depends on external API keys; insufficient error handling for missing keys or API failures."
     },
     {
-      "id": "AI_INTEGRATION",
+      "id": "ENV_EXAMPLE",
       "severity": "notice",
-      "description": "The AI feature relies on external API keys which must be configured by the user via the UI; ensure documentation highlights this requirement."
+      "description": ".env.example was previously empty; now contains PORT=8080. Verify all referenced vars are documented."
     }
   ]
 }
