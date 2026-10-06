@@ -1,1 +1,116 @@
-<!DOCTYPE html><html lang='vi'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>Futuristic Calculator</title><link rel='stylesheet' href='style.css'><style>.paf-made-by{position:fixed;right:8px;bottom:8px;width:min(72px,12vw);max-width:12vw;height:auto;object-fit:contain;opacity:.5;background:transparent;padding:0;border:0;box-shadow:none;filter:none;pointer-events:none;z-index:30}</style></head><body><div class='calculator'><div class='display'><div id='history'></div><div id='result'>0</div></div><div class='buttons'><button class='op' onclick='clearAll()'>AC</button><button class='op' onclick='deleteLast()'>DEL</button><button class='op' onclick='appendOp("÷")'>÷</button><button class='op' onclick='appendOp("×")'>×</button><button onclick='appendNum("7")'>7</button><button onclick='appendNum("8")'>8</button><button onclick='appendNum("9")'>9</button><button class='op' onclick='appendOp("-")'>-</button><button onclick='appendNum("4")'>4</button><button onclick='appendNum("5")'>5</button><button onclick='appendNum("6")'>6</button><button class='op' onclick='appendOp("+")'>+</button><button onclick='appendNum("1")'>1</button><button onclick='appendNum("2")'>2</button><button onclick='appendNum("3")'>3</button><button class='eq' onclick='calculate()'>=</button><button class='zero' onclick='appendNum("0")'>0</button><button onclick='appendNum(".")'>.</button></div><div class='paf-made-by'>Made with App Builder — Pi SoloHost</div></div><script src='script.js'></script><img class="paf-made-by" src="/made-by.png" alt="Made with App Builder — Pi SoloHost"></body></html>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Futuristic Calculator AI</title>
+  <link rel="stylesheet" href="style.css">
+<style>.paf-made-by{position:fixed;right:8px;bottom:8px;width:min(72px,12vw);max-width:12vw;height:auto;object-fit:contain;opacity:.5;background:transparent;padding:0;border:0;box-shadow:none;filter:none;pointer-events:none;z-index:30}</style></head>
+<body>
+  <div class="app-shell">
+    <!-- Main Calculator (preserved) -->
+    <div class="calculator" id="calculator">
+      <div class="display">
+        <div id="history"></div>
+        <div id="result">0</div>
+      </div>
+      <div class="buttons">
+        <button class="op" onclick="clearAll()">AC</button>
+        <button class="op" onclick="deleteLast()">DEL</button>
+        <button class="op" onclick="appendOp('÷')">÷</button>
+        <button class="op" onclick="appendOp('×')">×</button>
+        <button onclick="appendNum('7')">7</button>
+        <button onclick="appendNum('8')">8</button>
+        <button onclick="appendNum('9')">9</button>
+        <button class="op" onclick="appendOp('-')">-</button>
+        <button onclick="appendNum('4')">4</button>
+        <button onclick="appendNum('5')">5</button>
+        <button onclick="appendNum('6')">6</button>
+        <button class="op" onclick="appendOp('+')">+</button>
+        <button onclick="appendNum('1')">1</button>
+        <button onclick="appendNum('2')">2</button>
+        <button onclick="appendNum('3')">3</button>
+        <button class="eq" onclick="calculate()">=</button>
+        <button class="zero" onclick="appendNum('0')">0</button>
+        <button onclick="appendNum('.')">.</button>
+      </div>
+
+      <!-- Workspace (new, integrated) -->
+      <div class="workspace" id="workspace">
+        <div class="ws-header">
+          <span>Workspace</span>
+          <div class="ws-actions">
+            <button type="button" class="ws-btn" onclick="wsCopy()" title="Copy">⎘</button>
+            <button type="button" class="ws-btn" onclick="wsClear()" title="Clear">✕</button>
+          </div>
+        </div>
+        <div class="ws-body" id="wsBody"></div>
+        <div class="ws-footer">
+          <button type="button" class="ws-btn primary" onclick="wsAddCurrent()">+ Current</button>
+          <button type="button" class="ws-btn" onclick="wsSendToCalc()">→ Calc</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating AI button — replaces Made-with text, uses image -->
+    <button type="button" class="ai-fab" id="aiFab" title="AI Assistant" aria-label="AI">
+      <img src="/made-by.png" alt="AI" class="ai-fab-img">
+      <span class="ai-fab-dot" id="aiStatusDot"></span>
+    </button>
+
+    <!-- Feedback button (small, non-intrusive) -->
+    <button type="button" class="fb-fab" id="fbFab" title="Feedback" aria-label="Feedback">💬</button>
+  </div>
+
+  <!-- AI Panel -->
+  <div class="panel-overlay" id="aiOverlay" hidden>
+    <div class="panel ai-panel" id="aiPanel">
+      <div class="panel-header">
+        <span class="panel-title">✦ AI</span>
+        <button type="button" class="panel-close" id="aiClose" aria-label="Close">×</button>
+      </div>
+      <div class="panel-body" id="aiChat"></div>
+      <div class="panel-footer">
+        <input type="text" id="aiInput" placeholder="What do you want to calculate?" autocomplete="off" enterkeyhint="send">
+        <button type="button" id="aiSend" aria-label="Send">➤</button>
+      </div>
+      <div class="ai-status-bar" id="aiStatusBar">AI: checking…</div>
+    </div>
+  </div>
+
+  <!-- Feedback Panel -->
+  <div class="panel-overlay" id="fbOverlay" hidden>
+    <div class="panel fb-panel" id="fbPanel">
+      <div class="panel-header">
+        <span class="panel-title">Feedback</span>
+        <button type="button" class="panel-close" id="fbClose" aria-label="Close">×</button>
+      </div>
+      <div class="panel-body fb-body">
+        <div id="fbDonate" class="fb-donate" hidden></div>
+        <label class="fb-label">Type</label>
+        <select id="fbType">
+          <option value="improvement">Improvement</option>
+          <option value="bug">Bug</option>
+          <option value="question">Question</option>
+        </select>
+        <label class="fb-label">Rating</label>
+        <div class="fb-stars" id="fbStars">
+          <button type="button" data-r="1">★</button>
+          <button type="button" data-r="2">★</button>
+          <button type="button" data-r="3">★</button>
+          <button type="button" data-r="4">★</button>
+          <button type="button" data-r="5">★</button>
+        </div>
+        <label class="fb-label">Message</label>
+        <textarea id="fbMessage" rows="4" placeholder="Your feedback…" maxlength="2000"></textarea>
+        <p class="fb-hint">No password / API key needed. Message only.</p>
+        <button type="button" class="fb-submit" id="fbSubmit">Send Feedback</button>
+        <p class="fb-status" id="fbStatus"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="shfh-client.js"></script>
+  <script src="script.js"></script>
+<img class="paf-made-by" src="/made-by.png" alt="Made with App Builder — Pi SoloHost"></body>
+</html>
