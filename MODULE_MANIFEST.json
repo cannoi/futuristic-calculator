@@ -1,0 +1,26 @@
+{
+  "name": "universal-ai-feedback-modules-solohost",
+  "version": "1.2.0",
+  "purpose": "Drop-in AI + Feedback integration for existing SoloHost and Node web apps",
+  "preserve_existing_ui": true,
+  "preserve_existing_business_logic": true,
+  "single_ai_entry": true,
+  "single_feedback_system": true,
+  "widgets": ["floating", "corner", "dock", "inline"],
+  "ai": {
+    "model_selection": "discovery-first",
+    "providers": ["openai", "gemini", "deepseek", "anthropic", "openrouter", "groq", "mistral", "xai", "custom", "local"],
+    "features": ["chat", "history", "app-knowledge", "live-context", "safe-actions", "settings", "logs", "test-connection", "model-discovery", "stale-model-recovery"]
+  },
+  "feedback": {
+    "features": ["notices", "unread-badge", "mark-read", "feedback", "rating", "offline-queue", "hub-donate"]
+  },
+  "security": {
+    "ai_keys_server_side": true,
+    "feedback_token_server_side": true,
+    "widget_shadow_dom": true,
+    "action_whitelist": true,
+    "optional_route_authorization": true,
+    "chat_rate_limit_default": 30
+  }
+}
