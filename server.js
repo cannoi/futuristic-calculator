@@ -3,8 +3,9 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chat, status: aiStatus } = require('./lib/ai-gateway');
+const { chat, status: aiStatus, catalogPublic } = require('./lib/ai-gateway');
 const { evaluate } = require('./lib/calc-engine');
+const store = require('./lib/settings-store');
 
 const PORT = process.env.PORT || 8080;
 const PUBLIC = path.join(__dirname, 'public');
@@ -14,6 +15,8 @@ const MIME = {
   '.js': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
   '.json': 'application/json',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
@@ -38,7 +41,6 @@ function send(res, status, body, type) {
   res.writeHead(status, {
     'Content-Type': type || 'application/json; charset=utf-8',
     'Content-Length': buf.length,
-    'Cache-Control': type && type.startsWith('text/html') ? 'no-cache' : 'public, max-age=60',
   });
   res.end(buf);
 }
@@ -47,6 +49,8 @@ async function handleApi(req, res, url) {
   if (url === '/health' && req.method === 'GET') {
     return send(res, 200, 'OK', 'text/plain');
   }
+
+  // SHFH config
   if (url === '/api/shfh-config' && req.method === 'GET') {
     return send(res, 200, {
       hubId: process.env.SHFH_HUB_ID || 'SHFH-CANNOI-0905428801',
@@ -55,11 +59,12 @@ async function handleApi(req, res, url) {
       ingestToken: process.env.SHFH_INGEST_TOKEN || 'cannoi_7Kp9xV2mQ8rN4tY6cL3wA5zD1eF0uH9',
       appId: process.env.SHFH_APP_ID || 'futuristic-calculator',
       appName: process.env.SHFH_APP_NAME || 'Futuristic Calculator',
-      version: process.env.SHFH_APP_VERSION || '1.1.0',
+      version: process.env.SHFH_APP_VERSION || '1.2.0',
       platform: 'solohost',
       enabled: process.env.SHFH_ENABLED !== '0',
     });
   }
+
   if (url === '/api/shfh-proxy/feedback' && req.method === 'POST') {
     try {
       const raw = await readBody(req);
@@ -74,21 +79,46 @@ async function handleApi(req, res, url) {
       const j = await r.json().catch(() => ({}));
       return send(res, r.status, j);
     } catch (e) {
+      store.appendLog('error', 'shfh.proxy', { error: e.message });
       return send(res, 502, { ok: false, error: e.message });
     }
   }
+
   if (url === '/api/calculate' && req.method === 'POST') {
     try {
       const body = JSON.parse(await readBody(req));
       if (!body.expression) return send(res, 400, { ok: false, error: 'expression required' });
-      return send(res, 200, evaluate(String(body.expression)));
+      const result = evaluate(String(body.expression));
+      store.appendLog('info', 'calculate', { expr: body.expression, ok: result.ok });
+      return send(res, 200, result);
     } catch (e) {
       return send(res, 400, { ok: false, error: e.message });
     }
   }
+
   if (url === '/api/ai/status' && req.method === 'GET') {
     return send(res, 200, aiStatus());
   }
+
+  if (url === '/api/ai/catalog' && req.method === 'GET') {
+    return send(res, 200, { providers: catalogPublic() });
+  }
+
+  if (url === '/api/ai/settings' && req.method === 'GET') {
+    return send(res, 200, store.publicSettings());
+  }
+
+  if (url === '/api/ai/settings' && req.method === 'POST') {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const pub = store.writeSettings(body);
+      store.appendLog('info', 'settings.saved', { provider: pub.provider, hasKey: pub.hasKey });
+      return send(res, 200, { ok: true, settings: pub, status: aiStatus() });
+    } catch (e) {
+      return send(res, 400, { ok: false, error: e.message });
+    }
+  }
+
   if (url === '/api/ai/chat' && req.method === 'POST') {
     try {
       const body = JSON.parse(await readBody(req));
@@ -102,9 +132,21 @@ async function handleApi(req, res, url) {
       });
       return send(res, 200, out);
     } catch (e) {
+      store.appendLog('error', 'ai.chat', { error: e.message });
       return send(res, 500, { ok: false, error: 'AI unavailable', detail: e.message });
     }
   }
+
+  if (url === '/api/logs' && req.method === 'GET') {
+    const limit = Math.min(200, parseInt(new URL(req.url, 'http://x').searchParams.get('limit') || '80', 10) || 80);
+    return send(res, 200, { logs: store.readLogs(limit) });
+  }
+
+  if (url === '/api/logs' && req.method === 'DELETE') {
+    store.clearLogs();
+    return send(res, 200, { ok: true });
+  }
+
   return null;
 }
 
@@ -123,16 +165,18 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(404);
         return res.end('Not found');
       }
-      const ext = path.extname(filePath);
+      const ext = path.extname(filePath).toLowerCase();
       res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
       res.end(data);
     });
   } catch (e) {
+    store.appendLog('error', 'server', { error: e.message });
     send(res, 500, { ok: false, error: e.message });
   }
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Futuristic Calculator AI running on port ${PORT}`);
+  store.appendLog('info', 'server.start', { port: PORT });
+  console.log(`Futuristic Calculator AI v1.2.0 on port ${PORT}`);
   console.log('AI:', aiStatus().message);
 });

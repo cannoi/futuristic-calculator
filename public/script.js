@@ -1,6 +1,7 @@
-/* ===== Original Calculator Engine (preserved) ===== */
+/* ===== Original Calculator (preserved) ===== */
 let current = '0';
 let history = '';
+const calcHistory = []; // local history for AI context
 
 function update() {
   document.getElementById('result').innerText = current;
@@ -27,8 +28,12 @@ function deleteLast() {
 }
 function calculate() {
   try {
+    const expr = (history ? history + ' ' : '') + current;
     let h = history.replace(/×/g, '*').replace(/÷/g, '/');
-    current = eval(h + current).toString();
+    const result = eval(h + current).toString();
+    calcHistory.push({ expr: expr.trim(), result, ts: Date.now() });
+    if (calcHistory.length > 40) calcHistory.shift();
+    current = result;
     history = '';
   } catch {
     current = 'Error';
@@ -36,58 +41,25 @@ function calculate() {
   update();
 }
 
-/* ===== Workspace ===== */
-const wsItems = [];
-
-function renderWs() {
-  const el = document.getElementById('wsBody');
-  if (!el) return;
-  if (!wsItems.length) {
-    el.innerHTML = '';
-    return;
-  }
-  el.innerHTML = wsItems.map((it, i) =>
-    `<div class="ws-item" data-i="${i}">
-      <div>${escapeHtml(it.expr || '')}</div>
-      <div>= ${escapeHtml(String(it.result))} <span class="verified">${it.verified ? '✓' : ''}</span></div>
-    </div>`
-  ).join('');
-}
-function wsAddCurrent() {
-  const expr = (history ? history + ' ' : '') + current;
-  const val = current;
-  if (val === 'Error' || val === '0' && !history) return;
-  wsItems.push({ expr: expr.trim(), result: val, verified: true, source: 'Calculator', ts: Date.now() });
-  if (wsItems.length > 30) wsItems.shift();
-  renderWs();
-}
-function wsClear() {
-  wsItems.length = 0;
-  renderWs();
-}
-function wsCopy() {
-  const text = wsItems.map(it => `${it.expr} = ${it.result}`).join('\n');
-  if (!text) return;
-  navigator.clipboard?.writeText(text).catch(() => {});
-}
-function wsSendToCalc() {
-  if (!wsItems.length) return;
-  const last = wsItems[wsItems.length - 1];
-  current = String(last.result);
-  history = '';
-  update();
-}
-function wsAddAI(expr, result, verified) {
-  wsItems.push({ expr, result, verified: !!verified, source: 'AI', ts: Date.now() });
-  if (wsItems.length > 30) wsItems.shift();
-  renderWs();
-}
-
 function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/* ===== AI Panel ===== */
+/* ===== Tabs ===== */
+document.querySelectorAll('.tab').forEach((t) => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach((x) => x.classList.remove('active'));
+    t.classList.add('active');
+    const pane = document.getElementById('tab-' + t.dataset.tab);
+    if (pane) pane.classList.add('active');
+    if (t.dataset.tab === 'settings') loadSettingsForm();
+    if (t.dataset.tab === 'logs') loadLogs();
+    if (t.dataset.tab === 'feedback') refreshFeedbackUI();
+  });
+});
+
+/* ===== AI Panel open/close ===== */
 const aiChat = document.getElementById('aiChat');
 const aiInput = document.getElementById('aiInput');
 const aiHistory = [];
@@ -95,8 +67,10 @@ let aiBusy = false;
 
 function openAI() {
   document.getElementById('aiOverlay').hidden = false;
-  aiInput.focus();
   refreshAiStatus();
+  // default to chat
+  document.querySelector('.tab[data-tab="chat"]')?.click();
+  setTimeout(() => aiInput.focus(), 100);
 }
 function closeAI() {
   document.getElementById('aiOverlay').hidden = true;
@@ -141,7 +115,7 @@ function getCalcContext() {
   return {
     expression: (history ? history + ' ' : '') + current,
     result: current === 'Error' ? null : current,
-    workspace: wsItems.slice(-5).map(it => `${it.expr}=${it.result}`).join('; '),
+    calcHistory: calcHistory.slice(-10),
   };
 }
 
@@ -168,7 +142,8 @@ async function sendAI() {
 
     if (!data.ok) {
       appendMsg('ai', escapeHtml(data.error || 'AI unavailable') +
-        (data.detail ? `<br><small style="opacity:.6">${escapeHtml(data.detail)}</small>` : ''));
+        (data.detail ? `<br><small style="opacity:.6">${escapeHtml(data.detail)}</small>` : '') +
+        '<br><small>Mở tab Settings để cấu hình API key.</small>');
       return;
     }
 
@@ -177,21 +152,23 @@ async function sendAI() {
       for (const vr of data.verifiedResults) {
         html += `<div class="verified">✓ Verified: ${escapeHtml(String(vr.result))} <small>(${escapeHtml(vr.expression || '')})</small></div>`;
         html += `<div class="actions">
-          <button type="button" data-action="ws" data-expr="${escapeHtml(vr.expression || '')}" data-result="${escapeHtml(String(vr.result))}">Add to Workspace</button>
           <button type="button" data-action="calc" data-result="${escapeHtml(String(vr.result))}">Use in Calculator</button>
+          <button type="button" data-action="explain" data-expr="${escapeHtml(vr.expression || '')}" data-result="${escapeHtml(String(vr.result))}">Explain</button>
         </div>`;
+        calcHistory.push({ expr: vr.expression || '', result: String(vr.result), ts: Date.now(), source: 'AI' });
       }
     }
     const bubble = appendMsg('ai', html);
     bubble.querySelectorAll('[data-action]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        if (btn.dataset.action === 'ws') {
-          wsAddAI(btn.dataset.expr, btn.dataset.result, true);
-        } else if (btn.dataset.action === 'calc') {
+        if (btn.dataset.action === 'calc') {
           current = btn.dataset.result;
           history = '';
           update();
           closeAI();
+        } else if (btn.dataset.action === 'explain') {
+          aiInput.value = `Giải thích phép tính: ${btn.dataset.expr} = ${btn.dataset.result}`;
+          sendAI();
         }
       });
     });
@@ -201,21 +178,103 @@ async function sendAI() {
     if (aiHistory.length > 20) aiHistory.splice(0, 4);
   } catch (e) {
     loading.remove();
-    appendMsg('ai', 'AI connection failed. Calculator still works.');
+    appendMsg('ai', 'AI connection failed. Máy tính vẫn hoạt động bình thường.');
   } finally {
     aiBusy = false;
   }
 }
 
-/* ===== Feedback ===== */
+/* ===== Settings ===== */
+async function loadSettingsForm() {
+  try {
+    const [st, cat] = await Promise.all([
+      fetch('/api/ai/settings').then((r) => r.json()),
+      fetch('/api/ai/catalog').then((r) => r.json()).catch(() => ({ providers: [] })),
+    ]);
+    const sel = document.getElementById('setProvider');
+    const providers = (cat.providers && cat.providers.length)
+      ? cat.providers
+      : [
+        { id: 'openai', name: 'OpenAI' }, { id: 'gemini', name: 'Google Gemini' },
+        { id: 'deepseek', name: 'DeepSeek' }, { id: 'anthropic', name: 'Anthropic' },
+        { id: 'openrouter', name: 'OpenRouter' }, { id: 'groq', name: 'Groq' },
+        { id: 'mistral', name: 'Mistral' }, { id: 'xai', name: 'xAI' },
+        { id: 'custom', name: 'Custom OpenAI-compatible' },
+      ];
+    sel.innerHTML = '<option value="none">— None —</option>' +
+      providers.map((p) => `<option value="${p.id}">${escapeHtml(p.name || p.id)}</option>`).join('');
+    sel.value = st.provider || 'none';
+    document.getElementById('setApiKey').value = '';
+    document.getElementById('setKeyHint').textContent = st.hasKey
+      ? `Key hiện tại: ${st.maskedKey || '****'}`
+      : 'Key hiện tại: (chưa có)';
+    document.getElementById('setBaseUrl').value = st.baseUrl || '';
+    document.getElementById('setModel').value = st.model || 'auto';
+    document.getElementById('setMode').value = st.mode || 'cloud_enabled';
+  } catch (e) {
+    document.getElementById('setStatus').textContent = 'Không tải được settings';
+  }
+}
+
+document.getElementById('setSave').addEventListener('click', async () => {
+  const status = document.getElementById('setStatus');
+  status.textContent = 'Saving…';
+  try {
+    const body = {
+      provider: document.getElementById('setProvider').value,
+      baseUrl: document.getElementById('setBaseUrl').value.trim(),
+      model: document.getElementById('setModel').value.trim() || 'auto',
+      mode: document.getElementById('setMode').value,
+    };
+    const key = document.getElementById('setApiKey').value.trim();
+    if (key) body.apiKey = key;
+    const r = await fetch('/api/ai/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      status.textContent = 'Saved ✓';
+      document.getElementById('setApiKey').value = '';
+      await loadSettingsForm();
+      refreshAiStatus();
+    } else {
+      status.textContent = j.error || 'Failed';
+    }
+  } catch (e) {
+    status.textContent = e.message;
+  }
+});
+
+/* ===== Logs ===== */
+async function loadLogs() {
+  const view = document.getElementById('logsView');
+  try {
+    const r = await fetch('/api/logs?limit=100');
+    const j = await r.json();
+    if (!j.logs || !j.logs.length) {
+      view.textContent = '(no logs)';
+      return;
+    }
+    view.textContent = j.logs.map((l) =>
+      `${l.ts || ''} [${l.level}] ${l.msg}${l.error ? ' · ' + l.error : ''}${l.provider ? ' · ' + l.provider : ''}`
+    ).join('\n');
+  } catch {
+    view.textContent = 'Failed to load logs';
+  }
+}
+document.getElementById('logsRefresh').addEventListener('click', loadLogs);
+document.getElementById('logsClear').addEventListener('click', async () => {
+  await fetch('/api/logs', { method: 'DELETE' });
+  loadLogs();
+});
+
+/* ===== Feedback (inside AI panel) ===== */
 let shfh = null;
 let fbRating = 0;
-
-document.getElementById('fbFab').addEventListener('click', openFB);
-document.getElementById('fbClose').addEventListener('click', closeFB);
-document.getElementById('fbOverlay').addEventListener('click', (e) => {
-  if (e.target.id === 'fbOverlay') closeFB();
-});
+let unreadCount = 0;
+let lastSync = null;
 
 document.querySelectorAll('#fbStars button').forEach((b) => {
   b.addEventListener('click', () => {
@@ -225,15 +284,106 @@ document.querySelectorAll('#fbStars button').forEach((b) => {
     });
   });
 });
-
 document.getElementById('fbSubmit').addEventListener('click', submitFeedback);
 
-function openFB() {
-  document.getElementById('fbOverlay').hidden = false;
-  document.getElementById('fbStatus').textContent = '';
+function setUnreadBadge(n) {
+  unreadCount = n || 0;
+  const badge = document.getElementById('aiBadge');
+  const tabBadge = document.getElementById('fbTabBadge');
+  if (unreadCount > 0) {
+    badge.hidden = false;
+    badge.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+    if (tabBadge) {
+      tabBadge.hidden = false;
+      tabBadge.textContent = String(unreadCount);
+    }
+  } else {
+    badge.hidden = true;
+    if (tabBadge) tabBadge.hidden = true;
+  }
 }
-function closeFB() {
-  document.getElementById('fbOverlay').hidden = true;
+
+function renderDonate(donate) {
+  const box = document.getElementById('fbDonate');
+  if (!box || !donate) { if (box) box.hidden = true; return; }
+  box.hidden = false;
+  let html = '<strong>Ủng hộ / Donate</strong><br>';
+  // Show all useful fields from hub
+  const fields = [
+    ['author', 'Tác giả'],
+    ['name', 'Tên'],
+    ['label', 'Nhãn'],
+    ['url', 'Link'],
+    ['address', 'Địa chỉ'],
+    ['wallet', 'Ví'],
+    ['pi', 'Pi'],
+    ['note', 'Ghi chú'],
+    ['message', 'Thông báo'],
+  ];
+  let any = false;
+  for (const [k, label] of fields) {
+    if (donate[k]) {
+      any = true;
+      if (k === 'url') {
+        html += `${label}: <a href="${escapeHtml(donate[k])}" target="_blank" rel="noopener">${escapeHtml(donate[k])}</a><br>`;
+      } else {
+        html += `${label}: ${escapeHtml(String(donate[k]))}<br>`;
+      }
+    }
+  }
+  // Also dump any other string fields
+  for (const [k, v] of Object.entries(donate)) {
+    if (fields.some((f) => f[0] === k)) continue;
+    if (typeof v === 'string' && v.trim()) {
+      any = true;
+      html += `${escapeHtml(k)}: ${escapeHtml(v)}<br>`;
+    }
+  }
+  if (!any) html += '<small>Hub chưa cung cấp thông tin donate.</small>';
+  box.innerHTML = html;
+}
+
+function renderNotices(actions, notices) {
+  const el = document.getElementById('fbNotices');
+  if (!el) return;
+  const items = [];
+  if (Array.isArray(actions)) {
+    for (const a of actions) {
+      if (a.kind === 'update' || a.kind === 'unpaid_nudge' || a.kind === 'payment_ok' || a.id) {
+        items.push(a);
+      }
+    }
+  }
+  if (Array.isArray(notices)) {
+    for (const n of notices) items.push(n);
+  }
+  if (!items.length) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = items.map((n) => {
+    const id = n.id || n.update?.id || '';
+    return `<div class="fb-notice" data-id="${escapeHtml(id)}">
+      <strong>${escapeHtml(n.title || n.kind || 'Notice')}</strong>
+      ${n.body ? `<div>${escapeHtml(n.body)}</div>` : ''}
+      ${id ? `<button type="button" data-mark="${escapeHtml(id)}">Đã đọc</button>` : ''}
+    </div>`;
+  }).join('');
+  el.querySelectorAll('[data-mark]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (shfh) {
+        try { await shfh.markRead(btn.dataset.mark); } catch { /* ignore */ }
+      }
+      btn.closest('.fb-notice')?.remove();
+      setUnreadBadge(Math.max(0, unreadCount - 1));
+    });
+  });
+}
+
+function refreshFeedbackUI() {
+  if (!lastSync) return;
+  renderDonate(lastSync.donate);
+  renderNotices(lastSync.actions, lastSync.notices);
 }
 
 async function initFeedback() {
@@ -252,23 +402,15 @@ async function initFeedback() {
       locale: 'vi',
     });
 
-    // Prefer same-origin proxy if needed (SDK still posts to hub; we override when mixed content)
     const sync = await shfh.sync();
-    if (sync && sync.donate) {
-      const d = sync.donate;
-      const box = document.getElementById('fbDonate');
-      if (box) {
-        box.hidden = false;
-        let html = '<strong>Donate / Ủng hộ</strong><br>';
-        if (d.url) html += `<a href="${escapeHtml(d.url)}" target="_blank" rel="noopener">${escapeHtml(d.url)}</a><br>`;
-        if (d.address) html += `<small>${escapeHtml(d.label || 'Address')}: ${escapeHtml(d.address)}</small>`;
-        if (d.note) html += `<br><small>${escapeHtml(d.note)}</small>`;
-        if (d.author) html += `<br><small>Author: ${escapeHtml(d.author)}</small>`;
-        box.innerHTML = html;
-      }
-    }
+    lastSync = sync;
+    const count = (sync.notices?.length || 0) +
+      (sync.actions || []).filter((a) => a.kind === 'update' || a.kind === 'unpaid_nudge').length;
+    setUnreadBadge(count);
+    renderDonate(sync.donate);
+    renderNotices(sync.actions, sync.notices);
   } catch (e) {
-    console.warn('SHFH init failed', e);
+    console.warn('SHFH init', e);
   }
 }
 
@@ -276,11 +418,11 @@ async function submitFeedback() {
   const msg = (document.getElementById('fbMessage').value || '').trim();
   const status = document.getElementById('fbStatus');
   if (!msg) {
-    status.textContent = 'Please enter a message.';
+    status.textContent = 'Vui lòng nhập nội dung.';
     return;
   }
   if (!shfh) {
-    status.textContent = 'Feedback hub unavailable.';
+    status.textContent = 'Feedback hub không khả dụng.';
     return;
   }
   status.textContent = 'Sending…';
@@ -288,12 +430,12 @@ async function submitFeedback() {
     const type = document.getElementById('fbType').value;
     const out = await shfh.sendFeedback({ type, message: msg, rating: fbRating });
     if (out.ok || out.queued) {
-      status.textContent = out.queued ? 'Queued (offline). Will send later.' : 'Thank you!';
+      status.textContent = out.queued ? 'Đã xếp hàng (offline).' : 'Cảm ơn bạn!';
       document.getElementById('fbMessage').value = '';
       fbRating = 0;
       document.querySelectorAll('#fbStars button').forEach((x) => x.classList.remove('on'));
     } else {
-      status.textContent = 'Failed: ' + (out.error || 'unknown');
+      status.textContent = 'Lỗi: ' + (out.error || 'unknown');
     }
   } catch (e) {
     status.textContent = 'Error: ' + e.message;
@@ -302,6 +444,5 @@ async function submitFeedback() {
 
 /* ===== Init ===== */
 update();
-renderWs();
 refreshAiStatus();
 initFeedback();
