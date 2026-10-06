@@ -177,6 +177,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   store.appendLog('info', 'server.start', { port: PORT });
-  console.log(`Futuristic Calculator AI v1.2.0 on port ${PORT}`);
+  console.log(`Futuristic Calculator AI v1.3.0 on port ${PORT}`);
   console.log('AI:', aiStatus().message);
 });

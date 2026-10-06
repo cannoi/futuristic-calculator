@@ -45,6 +45,42 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Execute safe actions returned by AI (local or cloud) */
+function executeAppActions(actions) {
+  if (!Array.isArray(actions)) return;
+  for (const a of actions) {
+    if (!a || !a.action) continue;
+    switch (a.action) {
+      case 'clear_all':
+        clearAll();
+        break;
+      case 'set_result':
+      case 'use_result_in_calc':
+        if (a.value != null) {
+          current = String(a.value);
+          history = '';
+          update();
+        }
+        break;
+      case 'set_expression':
+        if (a.value != null) {
+          history = String(a.value);
+          current = '0';
+          update();
+        }
+        break;
+      case 'open_tab': {
+        const tab = a.value || 'chat';
+        const btn = document.querySelector('.tab[data-tab="' + tab + '"]');
+        if (btn) btn.click();
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}
+
 /* ===== Tabs ===== */
 document.querySelectorAll('.tab').forEach((t) => {
   t.addEventListener('click', () => {
@@ -143,11 +179,19 @@ async function sendAI() {
     if (!data.ok) {
       appendMsg('ai', escapeHtml(data.error || 'AI unavailable') +
         (data.detail ? `<br><small style="opacity:.6">${escapeHtml(data.detail)}</small>` : '') +
-        '<br><small>Mở tab Settings để cấu hình API key.</small>');
+        '<br><small>Mở tab Settings để cấu hình API key. Trợ giúp cơ bản & máy tính vẫn dùng được.</small>');
       return;
     }
 
+    // Execute app actions (clear, set result, open tab, …)
+    if (data.actions && data.actions.length) {
+      executeAppActions(data.actions);
+    }
+
     let html = escapeHtml(data.reply || '').replace(/\n/g, '<br>');
+    if (data.source === 'local' || data.source === 'local-fallback') {
+      html += '<div style="margin-top:6px;font-size:0.7rem;opacity:.5">Local assist</div>';
+    }
     if (data.verifiedResults && data.verifiedResults.length) {
       for (const vr of data.verifiedResults) {
         html += `<div class="verified">✓ Verified: ${escapeHtml(String(vr.result))} <small>(${escapeHtml(vr.expression || '')})</small></div>`;
