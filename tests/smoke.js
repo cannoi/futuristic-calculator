@@ -28,6 +28,10 @@ assert.ok(a.catalog().some((x) => x.id === 'local'));
 assert.ok(a.catalog().some((x) => x.id === 'openai'));
 assert.ok(a.catalog().some((x) => x.id === 'xai'));
 
+const pe = require(path.join(base, 'lib/ai-module/provider-engine.js'));
+assert.ok(typeof pe.normalizeBaseUrl === 'function');
+assert.ok(typeof pe.extractText === 'function');
+
 const adapter = require(path.join(base, 'lib/app-adapter.js'));
 assert.ok(typeof adapter.localReply === 'function');
 assert.ok(Array.isArray(adapter.actions));
